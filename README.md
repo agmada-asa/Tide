@@ -53,7 +53,7 @@ keyPassword=...
 All under `app/src/main/java/com/agmada/tide/`:
 
 - `data/Tags.kt`, `data/Library.kt`: the forgiving tag logic and library builder (pure Kotlin, unit-tested)
-- `data/Scanner.kt`: MediaStore scan; `data/Db.kt`, `data/TideRepo.kt`: playlists, edits and settings in Room
+- `data/Scanner.kt`: MediaStore scan; `data/LibraryCache.kt`: the last scan, saved so Tide opens instantly; `data/Db.kt`, `data/TideRepo.kt`: playlists, edits and settings in Room
 - `data/Organiser.kt` (planning, unit-tested) and `data/Tidy.kt` (doing): Tidy up; `data/Id3.kt`: ID3v2.3/2.4 reader and rewriter
 - `importer/Spotify.kt`: Spotify link parsing and embed-page reader; `importer/AlbumFinder.kt`: a song's real album from Spotify or iTunes
 - `playback/`: the Media3 session service, saved queue and sleep timer

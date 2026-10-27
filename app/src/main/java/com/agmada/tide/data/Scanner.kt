@@ -11,7 +11,8 @@ object Scanner {
 
     fun uriOf(id: Long): Uri = ContentUris.withAppendedId(collection, id)
 
-    fun scan(context: Context, hiddenFolders: Set<String>, minDurationMs: Long): List<RawSong> {
+    /** Every music file, hidden folders and short clips included: [visible] leaves those out, so changing either needs no rescan. */
+    fun scan(context: Context): List<RawSong> {
         val projection = arrayOf(
             MediaStore.Audio.Media._ID,
             MediaStore.Audio.Media.TITLE,
@@ -45,10 +46,6 @@ object Scanner {
             val mime = c.getColumnIndexOrThrow(MediaStore.Audio.Media.MIME_TYPE)
             val size = c.getColumnIndexOrThrow(MediaStore.Audio.Media.SIZE)
             while (c.moveToNext()) {
-                val path = c.getString(folder) ?: ""
-                val length = c.getLong(duration)
-                if (length < minDurationMs) continue
-                if (hiddenFolders.any { path.startsWith(it) }) continue
                 songs += RawSong(
                     id = c.getLong(id),
                     title = c.getString(title),
@@ -57,8 +54,8 @@ object Scanner {
                     album = c.getString(album),
                     track = c.getInt(track),
                     year = c.getInt(year),
-                    durationMs = length,
-                    folder = path,
+                    durationMs = c.getLong(duration),
+                    folder = c.getString(folder) ?: "",
                     fileName = c.getString(name) ?: "",
                     dateAdded = c.getLong(added),
                     mime = c.getString(mime),

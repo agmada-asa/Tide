@@ -1,6 +1,7 @@
 package com.agmada.tide.data
 
 import java.text.Normalizer
+import java.util.concurrent.ConcurrentHashMap
 
 /**
  * Forgiving tag reading. Most stock players trust every tag exactly as written, so one stray
@@ -18,15 +19,30 @@ object Tags {
 
     fun isUnknown(value: String?): Boolean = value == null || value.trim().lowercase() in unknowns
 
+    // Compiled once: building the library calls key() tens of thousands of times, and compiling
+    // a regex each time made that take seconds on a phone.
+    private val marks = Regex("\\p{M}+")
+    private val nonWord = Regex("[^\\p{L}\\p{N}]+")
+    private val leadingThe = Regex("^the ")
+    private val spaces = Regex("\\s+")
+    // The same few thousand names and titles come up again and again; a library rarely has more.
+    private val keys = ConcurrentHashMap<String, String>()
+
     /** A comparison key: case, accents, punctuation and "&"/"and" don't matter. */
     fun key(value: String): String {
-        val folded = Normalizer.normalize(value.lowercase(), Normalizer.Form.NFD).replace(Regex("\\p{M}+"), "")
+        keys[value]?.let { return it }
+        if (keys.size > 50_000) keys.clear()
+        return fold(value).also { keys[value] = it }
+    }
+
+    private fun fold(value: String): String {
+        val folded = Normalizer.normalize(value.lowercase(), Normalizer.Form.NFD).replace(marks, "")
         return folded
             .replace("&", " and ")
-            .replace(Regex("[^\\p{L}\\p{N}]+"), " ")
-            .replace(Regex("^the "), "")
+            .replace(nonWord, " ")
+            .replace(leadingThe, "")
             .trim()
-            .replace(Regex("\\s+"), " ")
+            .replace(spaces, " ")
     }
 
     private val featInBrackets = Regex("\\s*[(\\[]\\s*(?:feat\\.?|ft\\.?|featuring|with)\\s+([^)\\]]+)[)\\]]", RegexOption.IGNORE_CASE)
@@ -42,29 +58,44 @@ object Tags {
 
     private val artistSeparators = Regex("\\s*(?:;|/|,|\\s+feat\\.?\\s+|\\s+ft\\.?\\s+|\\s+featuring\\s+|\\s+x\\s+|\\s+with\\s+)\\s*", RegexOption.IGNORE_CASE)
     private val listMark = Regex("[,;/]")
+    private val listSeparators = Regex("${artistSeparators.pattern}|\\s+&\\s+", RegexOption.IGNORE_CASE)
+    private val featSeparators = Regex("${listSeparators.pattern}|\\s+and\\s+", RegexOption.IGNORE_CASE)
+    private val danglingSeparator = Regex("^\\s*(?:[,;/&]|and\\b)\\s*|\\s*(?:[,;/&]|and)\\s*$", RegexOption.IGNORE_CASE)
 
     /** Names with a comma, slash or "&" in them that are one artist, not a list. */
     private val wholeNames = listOf(
         "AC/DC", "Tyler, The Creator", "Earth, Wind & Fire", "Crosby, Stills, Nash & Young", "Crosby, Stills & Nash",
         "Emerson, Lake & Palmer", "Peter, Paul and Mary", "Blood, Sweat & Tears", "Hootie & the Blowfish",
     ).associateBy { key(it) }
+    private val splits = ConcurrentHashMap<String, List<String>>()
 
     /**
      * One artist tag as separate artists. "&" stays inside a name ("Simon & Garfunkel") unless the tag
      * is clearly a list ("A, B & C") or the caller knows it is one, like the names after "feat.".
      */
     fun splitArtists(value: String, splitAmpersand: Boolean = false): List<String> {
+        // One album's songs share an artist tag, so most calls have been answered before.
+        val memo = if (splitAmpersand) "&$value" else "|$value"
+        splits[memo]?.let { return it }
+        if (splits.size > 20_000) splits.clear()
+        return split(value, splitAmpersand).also { splits[memo] = it }
+    }
+
+    private fun split(value: String, splitAmpersand: Boolean): List<String> {
         wholeNames[key(value)]?.let { return listOf(value.trim()) }
         var rest = value
         val kept = mutableListOf<String>()
         // Pull out known names first so "Tyler, The Creator & Kali Uchis" keeps Tyler whole.
         for (name in wholeNames.values) {
-            val at = Regex(Regex.escape(name), RegexOption.IGNORE_CASE).find(rest) ?: continue
+            val at = rest.indexOf(name, ignoreCase = true).takeIf { it >= 0 } ?: continue
             kept += name
-            rest = rest.removeRange(at.range).let { r -> r.replace(Regex("^\\s*(?:[,;/&]|and\\b)\\s*|\\s*(?:[,;/&]|and)\\s*$", RegexOption.IGNORE_CASE), "") }
+            rest = rest.removeRange(at, at + name.length).replace(danglingSeparator, "")
         }
-        val isList = splitAmpersand || listMark.containsMatchIn(value)
-        val pattern = if (isList) Regex("${artistSeparators.pattern}|\\s+&\\s+" + if (splitAmpersand) "|\\s+and\\s+" else "", RegexOption.IGNORE_CASE) else artistSeparators
+        val pattern = when {
+            splitAmpersand -> featSeparators
+            listMark.containsMatchIn(value) -> listSeparators
+            else -> artistSeparators
+        }
         val split = if (rest.isBlank()) emptyList() else rest.split(pattern)
         return (kept + split).map { it.trim() }.filter { !isUnknown(it) }.distinctBy { key(it) }
     }
@@ -73,6 +104,7 @@ object Tags {
     data class FileGuess(val track: Int?, val artist: String?, val title: String)
 
     private val leadingTrack = Regex("^(\\d{1,3})(?:\\s*[-._)]\\s*|\\s+)(.+)$")
+    private val dash = Regex("\\s+[-–—]\\s+")
 
     fun parseFileName(fileName: String): FileGuess {
         var name = fileName.substringBeforeLast('.', fileName).trim()
@@ -83,7 +115,7 @@ object Tags {
             val number = match.groupValues[1].toInt()
             if (number in 1..199) { track = number; name = match.groupValues[2] }
         }
-        val parts = name.split(Regex("\\s+[-–—]\\s+"), limit = 2)
+        val parts = name.split(dash, limit = 2)
         return if (parts.size == 2 && parts[0].isNotBlank() && parts[1].isNotBlank()) {
             FileGuess(track, parts[0].trim(), parts[1].trim())
         } else {

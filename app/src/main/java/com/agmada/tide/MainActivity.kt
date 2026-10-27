@@ -82,7 +82,7 @@ class MainActivity : ComponentActivity() {
                 val request = rememberLauncherForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) { results ->
                     granted = results[audioPermission] == true
                 }
-                LaunchedEffect(granted) { if (granted) model.repo.rescan() }
+                LaunchedEffect(granted) { if (granted) model.repo.watch() }
                 if (granted) App(model) else Welcome {
                     request.launch(listOfNotNull(audioPermission, Manifest.permission.POST_NOTIFICATIONS.takeIf { Build.VERSION.SDK_INT >= 33 }).toTypedArray())
                 }

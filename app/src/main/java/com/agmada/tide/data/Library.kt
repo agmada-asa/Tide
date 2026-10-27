@@ -21,6 +21,10 @@ data class RawSong(
     val path: String get() = folder + fileName
 }
 
+/** The songs the library shows: none from [hiddenFolders], and none shorter than [minDurationMs]. */
+fun List<RawSong>.visible(hiddenFolders: Set<String>, minDurationMs: Long): List<RawSong> =
+    filter { song -> song.durationMs >= minDurationMs && hiddenFolders.none { song.folder.startsWith(it) } }
+
 /**
  * What the user changed by hand in Tide, kept in Tide's database. An empty [album] means "not on an album".
  * [track] and [year] come from looking a song up online.
@@ -226,7 +230,10 @@ class Library(
                 val k = Tags.key(name)
                 albumsByArtist.getOrPut(k) { mutableListOf() } += album
                 if (k !in artistNames) artistNames[k] = mutableListOf(name)
-                artistSongs.getOrPut(k) { mutableListOf() }.let { list -> album.songs.forEach { if (it !in list) list += it } }
+                artistSongs.getOrPut(k) { mutableListOf() }.let { list ->
+                    val have = list.mapTo(HashSet()) { it.id }
+                    album.songs.forEach { if (it.id !in have) list += it }
+                }
             }
             val albumsBySong = albums.filter { !it.isSingle }.flatMap { a -> a.songs.map { it.id to a } }.toMap()
             val artists = artistNames.map { (k, names) ->
@@ -236,9 +243,9 @@ class Library(
             }
 
             return Library(
-                songs = songs.sortedBy { sortKey(it.title) },
-                albums = albums.sortedBy { sortKey(it.title) },
-                artists = artists.filter { it.name != UNKNOWN_ARTIST || it.songs.isNotEmpty() }.sortedBy { sortKey(it.name) },
+                songs = songs.sortedBySortKey { it.title },
+                albums = albums.sortedBySortKey { it.title },
+                artists = artists.filter { it.name != UNKNOWN_ARTIST || it.songs.isNotEmpty() }.sortedBySortKey { it.name },
                 folders = songs.groupBy { it.folder }.map { (path, list) -> Folder(path, list.sortedBy { it.fileName }) }.sortedBy { it.path.lowercase() },
             )
         }
@@ -251,6 +258,10 @@ class Library(
 
         /** Sorts like Spotify: "The Beatles" under B, case and accents ignored. */
         fun sortKey(text: String): String = Tags.key(text).ifEmpty { text.lowercase() }
+
+        /** Works out each sort key once, rather than twice per comparison. */
+        private inline fun <T> List<T>.sortedBySortKey(text: (T) -> String): List<T> =
+            map { sortKey(text(it)) to it }.sortedBy { it.first }.map { it.second }
     }
 }
 

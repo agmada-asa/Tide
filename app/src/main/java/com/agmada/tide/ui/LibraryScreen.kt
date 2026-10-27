@@ -46,6 +46,7 @@ import com.agmada.tide.data.Artist
 import com.agmada.tide.data.Library
 import com.agmada.tide.data.PlaylistView
 import com.agmada.tide.data.Tags
+import kotlinx.coroutines.delay
 
 enum class Tab { Songs, Albums, Artists, Playlists, Folders }
 
@@ -103,7 +104,12 @@ fun LibraryScreen(model: AppModel, library: Library?, playlists: List<PlaylistVi
             )
         }
         if (library == null) {
-            item { Empty("Reading your music…", null) }
+            item {
+                // The saved library is ready in a moment; only the first scan takes long enough to mention.
+                var slow by remember { mutableStateOf(false) }
+                LaunchedEffect(Unit) { delay(600); slow = true }
+                if (slow) Empty("Reading your music…", null)
+            }
             return@LazyColumn
         }
         if (query.isNotBlank()) {

@@ -1,16 +1,21 @@
 package com.agmada.tide.data
 
+import android.Manifest
 import android.content.Context
+import android.content.pm.PackageManager
 import android.database.ContentObserver
+import android.os.Build
 import android.os.Handler
 import android.os.Looper
 import android.provider.MediaStore
+import androidx.core.content.ContextCompat
 import com.agmada.tide.importer.FoundAlbum
 import com.agmada.tide.importer.RemoteCollection
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.async
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -20,6 +25,8 @@ import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 
 data class PlaylistEntry(val item: PlaylistItemRow, val song: Song?)
 
@@ -41,7 +48,9 @@ class TideRepo private constructor(private val app: Context) {
     /** Leave out audio under 30 seconds: voice notes, ringtones, WhatsApp clips. */
     val skipShort: StateFlow<Boolean> = _skipShort
 
-    private val raws = MutableStateFlow<List<RawSong>?>(null)
+    /** Every music file from the last scan, or from the saved one until that finishes. */
+    private val scanned = MutableStateFlow<List<RawSong>?>(null)
+    private val raws = combine(scanned, _hidden, _skipShort) { songs, hidden, skipShort -> songs?.visible(hidden, if (skipShort) 30_000 else 0) }
 
     val library: StateFlow<Library?> = combine(raws, dao.edits()) { raws, edits ->
         raws?.let { Library.build(it, edits.associate { e -> e.path to e.toEdit() }) }
@@ -61,31 +70,65 @@ class TideRepo private constructor(private val app: Context) {
         .stateIn(scope, SharingStarted.Eagerly, emptySet())
 
     private var scanJob: Job? = null
+    private val scanning = Mutex()
     private var watching = false
+    /** The last scan and when it ran, saved or fresh. */
+    private var known: Snapshot? = null
+    // Only with audio permission: a cache from before it was taken away shouldn't still show.
+    private val saved = scope.async(Dispatchers.IO) { if (canReadAudio()) LibraryCache.load(app) else null }
 
     init {
         scope.launch { dao.insertPlaylist(PlaylistRow(id = TideDao.LIKED, name = "Liked songs")) }
+        scope.launch { saved.await()?.let { scanned.compareAndSet(null, it.songs) } }
     }
 
-    /** Reads the phone's music again. Call once audio permission is granted; after that it follows changes itself. */
-    fun rescan() {
+    private fun canReadAudio() = ContextCompat.checkSelfPermission(
+        app, if (Build.VERSION.SDK_INT >= 33) Manifest.permission.READ_MEDIA_AUDIO else Manifest.permission.READ_EXTERNAL_STORAGE,
+    ) == PackageManager.PERMISSION_GRANTED
+
+    /**
+     * Shows the saved library straight away and reads the phone's music again in the background,
+     * only if Android says something changed. Call once audio permission is granted; after that it follows changes itself.
+     */
+    fun watch() {
         if (!watching) {
             watching = true
             app.contentResolver.registerContentObserver(
                 MediaStore.Audio.Media.EXTERNAL_CONTENT_URI, true,
                 object : ContentObserver(Handler(Looper.getMainLooper())) {
-                    override fun onChange(selfChange: Boolean) = rescan(debounce = true)
+                    override fun onChange(selfChange: Boolean) = update(debounce = true, force = false)
                 },
             )
         }
-        rescan(debounce = false)
+        update(debounce = false, force = false)
     }
 
-    private fun rescan(debounce: Boolean) {
+    /** Reads the phone's music again, even if Android says nothing changed. */
+    fun rescan() = update(debounce = false, force = true)
+
+    private fun update(debounce: Boolean, force: Boolean) {
         scanJob?.cancel()
         scanJob = scope.launch(Dispatchers.IO) {
             if (debounce) delay(1500)
-            raws.value = runCatching { Scanner.scan(app, _hidden.value, if (_skipShort.value) 30_000 else 0) }.getOrElse { emptyList() }
+            scanning.withLock {
+                val last = known ?: saved.await()
+                val stamp = runCatching { LibraryCache.stamp(app) }.getOrNull()
+                if (!force && stamp != null && last != null && last.stamp == stamp) {
+                    scanned.compareAndSet(null, last.songs)
+                    return@launch
+                }
+                val songs = runCatching { Scanner.scan(app) }.getOrNull()
+                if (songs == null) {
+                    // Keep showing what we had rather than an empty library.
+                    scanned.compareAndSet(null, last?.songs ?: emptyList())
+                    return@launch
+                }
+                val fresh = Snapshot(stamp, songs)
+                known = fresh
+                // Equal lists don't emit, so an unchanged library isn't rebuilt.
+                scanned.value = songs
+                if (fresh != last) LibraryCache.save(app, fresh)
+            }
         }
     }
 
@@ -95,13 +138,11 @@ class TideRepo private constructor(private val app: Context) {
     private fun setHidden(folders: Set<String>) {
         _hidden.value = folders
         prefs.edit().putStringSet("hidden", folders).apply()
-        rescan(debounce = false)
     }
 
     fun setSkipShort(on: Boolean) {
         _skipShort.value = on
         prefs.edit().putBoolean("skipShort", on).apply()
-        rescan(debounce = false)
     }
 
     private fun Song.toItem(playlistId: Long, position: Int) =
