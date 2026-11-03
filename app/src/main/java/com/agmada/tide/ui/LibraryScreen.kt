@@ -240,7 +240,7 @@ private fun LazyListScope.playlists(model: AppModel, playlists: List<PlaylistVie
 fun PlaylistRowView(list: PlaylistView, onClick: () -> Unit) {
     Row(Modifier.fillMaxWidth().clickable(onClick = onClick).padding(horizontal = 20.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
         if (list.isLiked) {
-            Box(Modifier.size(52.dp).clip(RoundedCornerShape(Shape.art)).background(androidx.compose.ui.graphics.Brush.linearGradient(listOf(Ocean.light, Ocean.deep))), contentAlignment = Alignment.Center) {
+            Box(Modifier.size(52.dp).clip(RoundedCornerShape(Shape.art)).background(androidx.compose.ui.graphics.Brush.linearGradient(listOf(LikedGradient.light, LikedGradient.deep))), contentAlignment = Alignment.Center) {
                 Glyph(Glyphs.Heart, androidx.compose.ui.graphics.Color.White, 22.dp, filled = true)
             }
         } else {
@@ -307,8 +307,8 @@ private fun LazyListScope.searchResults(model: AppModel, library: Library, playl
     }
 }
 
-/** Ocean's logo gradient. */
-object Ocean {
+/** The blue gradient behind the Liked playlist's art, and the colour of a delete warning. */
+object LikedGradient {
     val light = androidx.compose.ui.graphics.Color(0xFFD3FBFF)
     val deep = androidx.compose.ui.graphics.Color(0xFF0088FF)
 }

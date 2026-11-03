@@ -211,7 +211,7 @@ fun MiniPlayer(model: AppModel, now: NowState, modifier: Modifier = Modifier) {
     }
 }
 
-/** A bottom sheet in Ocean's style: scrim, rounded top, drag down to close. */
+/** A bottom sheet: scrim, rounded top, drag down to close. */
 @Composable
 fun BottomSheet(visible: Boolean, onDismiss: () -> Unit, content: @Composable ColumnScope.() -> Unit) {
     Box(Modifier.fillMaxSize()) {
@@ -256,7 +256,7 @@ fun MenuItem(glyph: Glyphs, text: String, onClick: () -> Unit, tint: Color = p.f
     }
 }
 
-/** A pill text field, like Ocean's search box. */
+/** A pill text field. */
 @Composable
 fun Field(
     value: String,
