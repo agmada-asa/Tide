@@ -59,7 +59,7 @@ enum class Glyphs(val stroke: String) {
     val path: Path by lazy { PathParser().parsePathString(stroke).toPath() }
 }
 
-/** Draws a glyph in Ocean's 1.6 stroke. [filled] also fills it, for a liked heart. */
+/** Draws a glyph in a 1.6 stroke. [filled] also fills it, for a liked heart. */
 @Composable
 fun Glyph(glyph: Glyphs, color: Color, size: Dp = 22.dp, modifier: Modifier = Modifier, stroke: Float = 1.6f, filled: Boolean = false) {
     Canvas(modifier.size(size)) {

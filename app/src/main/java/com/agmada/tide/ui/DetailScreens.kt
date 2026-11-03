@@ -184,7 +184,7 @@ fun PlaylistScreen(model: AppModel, list: PlaylistView, now: NowState) {
             onMore = if (list.isLiked) null else ({ model.sheet = Sheet.PlaylistMenu(list.row.id) }),
         ) {
             if (list.isLiked) {
-                Box(Modifier.size(212.dp).clip(RoundedCornerShape(Shape.radius)).background(Brush.linearGradient(listOf(Ocean.light, Ocean.deep))), contentAlignment = Alignment.Center) {
+                Box(Modifier.size(212.dp).clip(RoundedCornerShape(Shape.radius)).background(Brush.linearGradient(listOf(LikedGradient.light, LikedGradient.deep))), contentAlignment = Alignment.Center) {
                     Glyph(Glyphs.Heart, Color.White, 64.dp, filled = true)
                 }
             } else {

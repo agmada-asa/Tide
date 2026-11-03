@@ -93,7 +93,7 @@ fun SettingsScreen(model: AppModel, library: Library?) {
     }
 }
 
-/** Ocean-style switch: a pill that fills when on. */
+/** A switch: a pill that fills when on. */
 @Composable
 private fun Switch(on: Boolean) {
     Box(Modifier.size(width = 46.dp, height = 28.dp).clip(CircleShape).background(if (on) p.fg else p.faint).padding(3.dp), contentAlignment = if (on) Alignment.CenterEnd else Alignment.CenterStart) {

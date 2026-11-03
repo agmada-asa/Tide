@@ -23,7 +23,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.agmada.tide.R
 
-/** Ocean's palette (design/themes.json in the Ocean repo, "ocean" theme). */
+/** The app's colours, one set for dark and one for light. */
 data class Palette(
     val bg: Color,
     val fg: Color,
@@ -59,7 +59,7 @@ private fun instrument(weight: Int) = Font(
 
 val Instrument = FontFamily(instrument(400), instrument(500), instrument(600))
 
-/** Ocean sets everything in Instrument Sans at 400; size does the work, not weight. */
+/** Everything is set in Instrument Sans at 400; size does the work, not weight. */
 object Type {
     val display = TextStyle(fontFamily = Instrument, fontSize = 34.sp, lineHeight = 38.sp, letterSpacing = (-0.6).sp)
     val title = TextStyle(fontFamily = Instrument, fontSize = 24.sp, lineHeight = 29.sp, letterSpacing = (-0.3).sp)
@@ -69,7 +69,7 @@ object Type {
     val tiny = TextStyle(fontFamily = Instrument, fontSize = 12.sp, lineHeight = 15.sp)
 }
 
-/** Ocean's shape sizes. */
+/** The app's shape sizes. */
 object Shape {
     val radius = 26.dp
     val art = 12.dp

@@ -158,7 +158,7 @@ private fun ColumnScope.PlaylistMenu(model: AppModel, list: PlaylistView?) {
     MenuItem(Glyphs.Queue, "Add to queue", { model.addToQueue(list.songs); model.sheet = null })
     MenuItem(Glyphs.Edit, "Rename", { renaming = true })
     if (confirmDelete) {
-        MenuItem(Glyphs.Delete, "Tap again to delete for good", { model.repo.deletePlaylist(list.row.id); model.sheet = null; model.back() }, tint = Ocean.deep)
+        MenuItem(Glyphs.Delete, "Tap again to delete for good", { model.repo.deletePlaylist(list.row.id); model.sheet = null; model.back() }, tint = LikedGradient.deep)
     } else {
         MenuItem(Glyphs.Delete, "Delete playlist", { confirmDelete = true })
     }
